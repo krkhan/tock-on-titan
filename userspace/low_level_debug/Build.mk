@@ -12,4 +12,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-RUST_APPS += low_level_debug
+RUST_APPS_golf2 += low_level_debug
+RUST_IMAGES_low_level_debug = $(IMAGES)

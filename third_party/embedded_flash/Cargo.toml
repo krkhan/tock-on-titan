@@ -1,0 +1,16 @@
+[package]
+name = "embedded_flash"
+version = "0.1.0"
+authors = ["Julien Cretin <cretin@google.com>"]
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+libtock_core = { path = "../libtock-rs/core" }
+libtock_drivers = { path = "../libtock-drivers" }
+persistent_store = { path = "../persistent_store" }
+
+[features]
+std = []
+default = ["alloc"]
+alloc = ["libtock_core/alloc"]

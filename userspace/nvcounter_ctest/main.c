@@ -29,7 +29,7 @@ int main(void) {
   }
   for (int i = 0; i < 5; i++) {
     int rval = tock_nvcounter_increment(&val);
-    printf("Increment %i is %u\n", i, val);
+    printf("Increment %i is %u, %d\n", i, val, rval);
     delay_ms(1000);
   }
   return 0;

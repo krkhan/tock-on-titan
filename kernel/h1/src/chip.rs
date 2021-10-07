@@ -24,7 +24,7 @@ use crate::uart;
 use crate::usb;
 
 pub struct Hotel {
-    mpu: cortexm3::mpu::MPU,
+    mpu: (),
     userspace_kernel_boundary: cortexm3::syscall::SysCall,
     systick: cortexm3::systick::SysTick,
 }
@@ -32,7 +32,7 @@ pub struct Hotel {
 impl Hotel {
     pub unsafe fn new() -> Hotel {
         Hotel {
-            mpu: cortexm3::mpu::MPU::new(),
+            mpu: (),
             userspace_kernel_boundary: cortexm3::syscall::SysCall::new(),
             systick: cortexm3::systick::SysTick::new(),
         }
@@ -40,7 +40,7 @@ impl Hotel {
 }
 
 impl Chip for Hotel {
-    type MPU = cortexm3::mpu::MPU;
+    type MPU = ();
     type UserspaceKernelBoundary = cortexm3::syscall::SysCall;
     type SchedulerTimer = cortexm3::systick::SysTick;
     type WatchDog = ();

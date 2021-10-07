@@ -26,6 +26,7 @@ pub mod fuse;
 pub mod flash;
 pub mod globalsec;
 pub mod nvcounter_syscall;
+pub mod opensk_syscall;
 pub mod personality;
 pub mod reset;
 pub mod spi_host;

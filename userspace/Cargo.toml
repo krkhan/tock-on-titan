@@ -43,6 +43,9 @@ panic = "unwind"
 members = [
 	"flash_test",
 	"low_level_debug",
+	"erase_storage",
+	"store_latency",
+	"store_debug",
 	"nvcounter_test",
 	"otpilot",
 	"test_harness",

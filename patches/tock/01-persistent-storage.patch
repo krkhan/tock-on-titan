@@ -1,0 +1,187 @@
+diff --git a/kernel/src/lib.rs b/kernel/src/lib.rs
+index 49e1e5182..807170195 100644
+--- a/kernel/src/lib.rs
++++ b/kernel/src/lib.rs
+@@ -122,7 +122,7 @@ pub use crate::sched::cooperative::{CoopProcessNode, CooperativeSched};
+ pub use crate::sched::mlfq::{MLFQProcessNode, MLFQSched};
+ pub use crate::sched::priority::PrioritySched;
+ pub use crate::sched::round_robin::{RoundRobinProcessNode, RoundRobinSched};
+-pub use crate::sched::{Kernel, Scheduler};
++pub use crate::sched::{Kernel, Scheduler, StorageLocation};
+ 
+ // Export only select items from the process module. To remove the name conflict
+ // this cannot be called `process`, so we use a shortened version. These
+diff --git a/kernel/src/memop.rs b/kernel/src/memop.rs
+index 348c746a5..5465c95f4 100644
+--- a/kernel/src/memop.rs
++++ b/kernel/src/memop.rs
+@@ -108,6 +108,25 @@ pub(crate) fn memop(process: &dyn ProcessType, op_type: usize, r1: usize) -> Ret
+             ReturnCode::SUCCESS
+         }
+ 
++        // Op Type 12: Number of storage locations.
++        12 => ReturnCode::SuccessWithValue { value: process.number_storage_locations() },
++
++        // Op Type 13: The start address of the storage location indexed by r1.
++        13 => {
++            match process.get_storage_location(r1) {
++                None => ReturnCode::FAIL,
++                Some(x) => ReturnCode::SuccessWithValue { value: x.address }
++            }
++        }
++
++        // Op Type 14: The size of the storage location indexed by r1.
++        14 => {
++            match process.get_storage_location(r1) {
++                None => ReturnCode::FAIL,
++                Some(x) => ReturnCode::SuccessWithValue { value: x.size }
++            }
++        }
++
+         _ => ReturnCode::ENOSUPPORT,
+     }
+ }
+diff --git a/kernel/src/process.rs b/kernel/src/process.rs
+index c52754be3..ae6a58341 100644
+--- a/kernel/src/process.rs
++++ b/kernel/src/process.rs
+@@ -359,6 +359,15 @@ pub trait ProcessType {
+     /// writeable flash region.
+     fn get_writeable_flash_region(&self, region_index: usize) -> (u32, u32);
+ 
++    /// How many storage locations are defined for this process.
++    fn number_storage_locations(&self) -> usize;
++
++    /// Get the i-th storage location.
++    fn get_storage_location(&self, index: usize) -> Option<&crate::StorageLocation>;
++
++    /// Whether a slice fits in a storage location.
++    fn fits_in_storage_location(&self, ptr: usize, len: usize) -> bool;
++
+     /// Debug function to update the kernel on where the stack starts for this
+     /// process. Processes are not required to call this through the memop
+     /// system call, but it aids in debugging the process.
+@@ -1048,6 +1057,35 @@ impl<C: Chip> ProcessType for Process<'_, C> {
+         self.header.get_writeable_flash_region(region_index)
+     }
+ 
++    fn number_storage_locations(&self) -> usize {
++        self.kernel.storage_locations().len()
++    }
++
++    fn get_storage_location(&self, index: usize) -> Option<&crate::StorageLocation> {
++        self.kernel.storage_locations().get(index)
++    }
++
++    fn fits_in_storage_location(&self, ptr: usize, len: usize) -> bool {
++        self.kernel
++            .storage_locations()
++            .iter()
++            .any(|storage_location| {
++                let storage_ptr = storage_location.address;
++                let storage_len = storage_location.size;
++                // We want to check the 2 following inequalities:
++                // (1) `storage_ptr <= ptr`
++                // (2) `ptr + len <= storage_ptr + storage_len`
++                // However, the second one may overflow written as is. We introduce a third
++                // inequality to solve this issue:
++                // (3) `len <= storage_len`
++                // Using this third inequality, we can rewrite the second one as:
++                // (4) `ptr - storage_ptr <= storage_len - len`
++                // This fourth inequality is equivalent to the second one but doesn't overflow when
++                // the first and third inequalities hold.
++                storage_ptr <= ptr && len <= storage_len && ptr - storage_ptr <= storage_len - len
++            })
++    }
++
+     fn update_stack_start_pointer(&self, stack_pointer: *const u8) {
+         if stack_pointer >= self.mem_start() && stack_pointer < self.mem_end() {
+             self.debug.map(|debug| {
+@@ -1751,6 +1789,33 @@ impl<C: 'static + Chip> Process<'_, C> {
+             return Err(ProcessLoadError::MpuInvalidFlashLength);
+         }
+ 
++        // Allocate MPU region for the storage locations. The storage locations are currently
++        // readable by all processes due to lack of stable app id.
++        for storage_location in kernel.storage_locations() {
++            if chip
++                .mpu()
++                .allocate_region(
++                    storage_location.address as *const u8,
++                    storage_location.size,
++                    storage_location.size,
++                    mpu::Permissions::ReadOnly,
++                    &mut mpu_config,
++                )
++                .is_some()
++            {
++                continue;
++            }
++            if config::CONFIG.debug_load_processes {
++                debug!(
++                    "[!] flash=[{:#010X}:{:#010X}] process={:?} - couldn't allocate flash region",
++                    storage_location.address,
++                    storage_location.address + storage_location.size,
++                    process_name
++                );
++            }
++            return Ok((None, remaining_memory));
++        }
++
+         // Determine how much space we need in the application's
+         // memory space just for kernel and grant state. We need to make
+         // sure we allocate enough memory just for that.
+diff --git a/kernel/src/sched.rs b/kernel/src/sched.rs
+index 10626a2e1..8844bc6c3 100644
+--- a/kernel/src/sched.rs
++++ b/kernel/src/sched.rs
+@@ -118,6 +118,12 @@ pub enum SchedulingDecision {
+     TrySleep,
+ }
+ 
++/// Represents a storage location in flash.
++pub struct StorageLocation {
++    pub address: usize,
++    pub size: usize,
++}
++
+ /// Main object for the kernel. Each board will need to create one.
+ pub struct Kernel {
+     /// How many "to-do" items exist at any given time. These include
+@@ -127,6 +133,9 @@ pub struct Kernel {
+     /// This holds a pointer to the static array of Process pointers.
+     processes: &'static [Option<&'static dyn process::ProcessType>],
+ 
++    /// List of storage locations.
++    storage_locations: &'static [StorageLocation],
++
+     /// A counter which keeps track of how many process identifiers have been
+     /// created. This is used to create new unique identifiers for processes.
+     process_identifier_max: Cell<usize>,
+@@ -170,9 +179,17 @@ pub enum StoppedExecutingReason {
+ 
+ impl Kernel {
+     pub fn new(processes: &'static [Option<&'static dyn process::ProcessType>]) -> Kernel {
++        Kernel::new_with_storage(processes, &[])
++    }
++
++    pub fn new_with_storage(
++        processes: &'static [Option<&'static dyn process::ProcessType>],
++        storage_locations: &'static [StorageLocation],
++    ) -> Kernel {
+         Kernel {
+             work: Cell::new(0),
+             processes,
++            storage_locations: storage_locations,
+             process_identifier_max: Cell::new(0),
+             grant_counter: Cell::new(0),
+             grants_finalized: Cell::new(false),
+@@ -900,4 +917,8 @@ impl Kernel {
+ 
+         (return_reason, time_executed_us)
+     }
++
++    pub fn storage_locations(&self) -> &'static [StorageLocation] {
++        self.storage_locations
++    }
+ }

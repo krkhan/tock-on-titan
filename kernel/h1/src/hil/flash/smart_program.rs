@@ -14,18 +14,25 @@
 
 /// A state machine for driving execution of the flash module's smart
 /// programming functionality.
-
 use ::kernel::hil::time::{Alarm, Frequency};
 use ::kernel::ReturnCode;
 
 #[derive(Debug)]
 pub enum SmartProgramState {
-    Init(/*attempts_remaining*/ u8, /*final_pulse_needed*/ bool, /*timeout_nanoseconds*/ u32),
-    Running(/*attempts_remaining*/ u8, /*final_pulse_needed*/ bool, /*timeout_nanoseconds*/ u32),
+    Init(
+        /*attempts_remaining*/ u8,
+        /*final_pulse_needed*/ bool,
+        /*timeout_nanoseconds*/ u32,
+    ),
+    Running(
+        /*attempts_remaining*/ u8,
+        /*final_pulse_needed*/ bool,
+        /*timeout_nanoseconds*/ u32,
+    ),
     Finished(/*return_code*/ ReturnCode),
 }
 
-use self::SmartProgramState::{Init,Finished,Running};
+use self::SmartProgramState::{Finished, Init, Running};
 
 impl SmartProgramState {
     /// Initialize the smart programming state machine. The state machine must
@@ -37,20 +44,32 @@ impl SmartProgramState {
     /// Returns the return code for the smart program execution, or None if it
     /// is still running.
     pub fn return_code(&self) -> Option<ReturnCode> {
-        if let Finished(code) = *self { Some(code) } else { None }
+        if let Finished(code) = *self {
+            Some(code)
+        } else {
+            None
+        }
     }
 
     /// Performs a state machine update during smart programming. This should be
     /// done during initialization and when a wait finishes.
     pub fn step<'a, A: Alarm<'a>, H: super::hardware::Hardware>(
-        self, alarm: &A, hw: &H, opcode: u32, bank: super::hardware::Bank) -> Self
-    {
+        self,
+        alarm: &A,
+        hw: &H,
+        opcode: u32,
+        bank: super::hardware::Bank,
+    ) -> Self {
         match self {
             Init(attempts_remaining, final_pulse_needed, timeout_nanoseconds) => {
                 hw.trigger(opcode, bank);
                 set_program_timeout(alarm, timeout_nanoseconds);
-                Running(attempts_remaining - 1, final_pulse_needed, timeout_nanoseconds)
-            },
+                Running(
+                    attempts_remaining - 1,
+                    final_pulse_needed,
+                    timeout_nanoseconds,
+                )
+            }
             Running(attempts_remaining, final_pulse_needed, timeout_nanoseconds) => {
                 // Copied from Cr50: a timeout causes an immediate failure with
                 // no retry.
@@ -80,15 +99,20 @@ impl SmartProgramState {
                     // Operation failed; retry.
                     hw.trigger(opcode, bank);
                     set_program_timeout(alarm, timeout_nanoseconds);
-                    return SmartProgramState::Running(attempts_remaining - 1,
-                        final_pulse_needed, timeout_nanoseconds);
+                    return SmartProgramState::Running(
+                        attempts_remaining - 1,
+                        final_pulse_needed,
+                        timeout_nanoseconds,
+                    );
                 }
 
                 // The operation failed max_attempts times -- indicate an error.
                 alarm.disarm();
                 return SmartProgramState::Finished(decode_error(error));
+            }
+            Finished(return_code) => {
+                Finished(return_code)
             },
-            Finished(return_code) => Finished(return_code),
         }
     }
 }
@@ -100,7 +124,11 @@ pub fn decode_error(error_flags: u16) -> ReturnCode {
     // was probably out of bounds. Otherwise, emit a generic error message (none
     // of the other error messages indicate anything other than driver or
     // hardware errors).
-    if error_flags & 0b10 != 0 { ReturnCode::ESIZE } else { ReturnCode::FAIL }
+    if error_flags & 0b10 != 0 {
+        ReturnCode::ESIZE
+    } else {
+        ReturnCode::FAIL
+    }
 }
 
 // Divide two u32's while rounding up (rather than the default round-down
@@ -110,7 +138,12 @@ pub fn div_round_up(numerator: u64, denominator: u64) -> u64 {
 }
 
 fn set_program_timeout<'a, A: Alarm<'a>>(alarm: &A, timeout_nanoseconds: u32) {
-    alarm.set_alarm(alarm.now(),
-        (div_round_up(A::Frequency::frequency() as u64 * timeout_nanoseconds as u64,
-                     1_000_000_000) as u32).into());
+    alarm.set_alarm(
+        alarm.now(),
+        (div_round_up(
+            A::Frequency::frequency() as u64 * timeout_nanoseconds as u64,
+            1_000_000_000,
+        ) as u32)
+            .into(),
+    );
 }

@@ -13,22 +13,9 @@
 # limitations under the License.
 
 BUILD_SUBDIRS := $(addprefix userspace/,                   \
-                                         aes_test          \
-                                         blink             \
-                                         dcrypto_test      \
-                                         flash_test        \
-                                         gpio_test         \
-                                         low_level_debug   \
-                                         nvcounter_ctest   \
-                                         nvcounter_test    \
-                                         otpilot           \
-                                         personality_clear \
-                                         personality_test  \
-                                         rng               \
-                                         sha_test          \
-                                         spin              \
-                                         u2f_app           \
-                                         u2f_test )
+                                         erase_storage     \
+                                         store_debug       \
+                                         store_latency )
 
 # All boards that we should build for
 BOARDS += golf2

@@ -1,19 +1,21 @@
 [submodule "third_party/elf2tab"]
+	branch = krkhan_opensk
 	path = third_party/elf2tab
-	url = https://github.com/tock/elf2tab
+	url = https://github.com/krkhan/elf2tab
 
 [submodule "third_party/libtock-c"]
 	path = third_party/libtock-c
 	url = https://github.com/tock/libtock-c
 
 [submodule "third_party/libtock-rs"]
-	branch = google
+	branch = krkhan_opensk
 	path = third_party/libtock-rs
-	url = https://github.com/tock/libtock-rs
+	url = https://github.com/krkhan/libtock-rs
 
 [submodule "third_party/tock"]
 	path = third_party/tock
 	url = https://github.com/tock/tock.git
+	ignore = dirty
 [submodule "third_party/manticore"]
 	path = third_party/manticore
 	url = https://github.com/lowRISC/manticore.git

@@ -101,6 +101,7 @@ prtest: build check devicetests localtests
 setup:
 	cd userspace && rustup target add thumbv7m-none-eabi
 	cd kernel && rustup target add thumbv7m-none-eabi
+	./maintainers/patches restore
 
 
 # A target that prints an error message and fails the build if the cargo version

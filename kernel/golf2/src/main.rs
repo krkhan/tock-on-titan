@@ -69,6 +69,20 @@ static mut APP_MEMORY: [u8; 0xc000] = [0; 0xc000];
 
 static mut PROCESSES: [Option<&'static dyn kernel::procs::ProcessType>; NUM_PROCS] = [None];
 
+const STORAGE_LOCATIONS: [kernel::StorageLocation; 2] = [
+    kernel::StorageLocation {
+        address: 0xBE000,  // TODO(krkhan): Try also with 0xBE800 here
+        size: 0x800,
+        storage_type: kernel::StorageType::STORE,
+    },
+    // We skip the page 0xBE800 which seems to be personality.
+    kernel::StorageLocation {
+        address: 0xBF000,
+        size: 0x1000,
+        storage_type: kernel::StorageType::STORE,
+    },
+];
+
 /// Dummy buffer that causes the linker to reserve enough space for the stack.
 #[no_mangle]
 #[link_section = ".stack_buffer"]
@@ -89,6 +103,8 @@ pub struct Golf {
     >,
     nvcounter: &'static h1_syscalls::nvcounter_syscall::NvCounterSyscall<'static,
         FlashCounter<'static, h1::hil::flash::virtual_flash::FlashUser<'static>>>,
+    opensk: &'static h1_syscalls::opensk_syscall::OpenskSyscall<'static,
+        h1::hil::flash::virtual_flash::FlashUser<'static>>,
     u2f_usb: &'static h1::usb::driver::U2fSyscallDriver<'static>,
     personality: &'static h1_syscalls::personality::PersonalitySyscall<'static>,
 }
@@ -175,7 +191,10 @@ pub unsafe fn reset_handler() {
     let main_cap = create_capability!(capabilities::MainLoopCapability);
     let grant_cap = create_capability!(capabilities::MemoryAllocationCapability);
 
-    let kernel = static_init!(kernel::Kernel, kernel::Kernel::new(&PROCESSES));
+    let kernel = static_init!(
+        kernel::Kernel,
+        kernel::Kernel::new_with_storage(&PROCESSES, &STORAGE_LOCATIONS)
+    );
 
     let dynamic_deferred_call_clients =
         static_init!([DynamicDeferredCallClientState; 2], Default::default());
@@ -272,6 +291,9 @@ pub unsafe fn reset_handler() {
     let nvcounter_flash = static_init!(h1::hil::flash::virtual_flash::FlashUser<'static>,
                                        h1::hil::flash::virtual_flash::FlashUser::new(flash_mux));
 
+    let opensk_flash = static_init!(h1::hil::flash::virtual_flash::FlashUser<'static>,
+                                    h1::hil::flash::virtual_flash::FlashUser::new(flash_mux));
+
     flash.set_client(flash_mux);
 
     let timer_virtual_alarm = static_init!(VirtualMuxAlarm<'static, Timels>,
@@ -311,6 +333,12 @@ pub unsafe fn reset_handler() {
             FlashCounter<'static, h1::hil::flash::virtual_flash::FlashUser<'static>>>,
         h1_syscalls::nvcounter_syscall::NvCounterSyscall::new(nvcounter, kernel.create_grant(&grant_cap)));
     nvcounter.set_client(nvcounter_syscall);
+
+    let opensk_syscall = static_init!(
+        h1_syscalls::opensk_syscall::OpenskSyscall<'static,
+            h1::hil::flash::virtual_flash::FlashUser<'static>>,
+        h1_syscalls::opensk_syscall::OpenskSyscall::new(opensk_flash, kernel.create_grant(&grant_cap)));
+    opensk_flash.set_client(opensk_syscall);
 
     let u2f = static_init!(
         h1::usb::driver::U2fSyscallDriver<'static>,
@@ -392,11 +420,13 @@ pub unsafe fn reset_handler() {
         const FLASH_START: usize = 0x40000;
         const FLASH_SIZE: usize = 512 * 1024;
         const FLASH_PAGE_SIZE: usize = 2048;
-        vs(FLASH_REGION2_BASE as *mut u32, (FLASH_START + FLASH_SIZE - 3*FLASH_PAGE_SIZE) as u32);
+        const REGION_START: usize = STORAGE_LOCATIONS[0].address;
+        const REGION_SIZE: usize = FLASH_START + FLASH_SIZE - REGION_START;
+        vs(FLASH_REGION2_BASE as *mut u32, REGION_START as u32);
         // The value of the SIZE register is one less than the size of the
         // region, i.e. the last address within the region is the start address
         // + the size register.
-        vs(FLASH_REGION2_SIZE as *mut u32, (3*FLASH_PAGE_SIZE - 1) as u32);
+        vs(FLASH_REGION2_SIZE as *mut u32, (REGION_SIZE - 1) as u32);
         // Enable the region for reads and writes.
         vs(FLASH_REGION2_CTRL as *mut u32, 0b111);
     }
@@ -434,6 +464,7 @@ pub unsafe fn reset_handler() {
         dcrypto: dcrypto,
         low_level_debug,
         nvcounter: nvcounter_syscall,
+        opensk: opensk_syscall,
         rng: rng,
         u2f_usb: u2f,
         personality: personality,
@@ -486,9 +517,29 @@ impl Platform for Golf {
             h1_syscalls::dcrypto::DRIVER_NUM           => f(Some(self.dcrypto)),
             h1_syscalls::digest::DRIVER_NUM            => f(Some(self.digest)),
             h1_syscalls::nvcounter_syscall::DRIVER_NUM => f(Some(self.nvcounter)),
+            h1_syscalls::opensk_syscall::DRIVER_NUM    => f(Some(self.opensk)),
             h1_syscalls::personality::DRIVER_NUM       => f(Some(self.personality)),
             kernel::ipc::DRIVER_NUM                    => f(Some(&self.ipc)),
             _ =>  f(None),
+        }
+    }
+
+    fn filter_syscall(
+        &self,
+        process: &dyn kernel::procs::ProcessType,
+        syscall: &kernel::syscall::Syscall,
+    ) -> Result<(), kernel::ReturnCode> {
+        use kernel::syscall::Syscall;
+        match *syscall {
+            Syscall::COMMAND {
+                driver_number: h1_syscalls::opensk_syscall::DRIVER_NUM,
+                subdriver_number: cmd,
+                arg0: ptr,
+                arg1: len,
+            } if (cmd == 2 || cmd == 3) && !process.fits_in_storage_location(ptr, len) => {
+                Err(kernel::ReturnCode::EINVAL)
+            }
+            _ => Ok(()),
         }
     }
 }
