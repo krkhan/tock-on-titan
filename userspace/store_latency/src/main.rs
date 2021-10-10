@@ -113,9 +113,11 @@ fn compute_latency(
         for i in 0..count {
             let key = 1 + key_increment * i;
             // For some reason the kernel sometimes fails.
-            while store.insert(key, &vec![0; 4 * word_length]).is_err() {
+            if let Err(e) = store.insert(key, &vec![0; 4 * word_length]) {
                 // We never enter this loop in practice, but we still need it for the kernel.
-                writeln!(console, "Retry insert.").unwrap();
+                writeln!(console, "Insert failed: {:?}", e).unwrap();
+                console.flush();
+                panic!("Insert failed");
             }
         }
     });
