@@ -169,10 +169,10 @@ fn main() {
     let mut stats = Vec::new();
 
     writeln!(Console::new(), "\nRunning 2 tests...").unwrap();
-    // Simulate a store full of credentials (of 50 words).
-    stats.push(compute_latency(&timer, config.num_pages, 1, 50));
     // Simulate a store full of increments of a single counter.
     stats.push(compute_latency(&timer, config.num_pages, 0, 1));
+    // Simulate a store full of credentials (of 50 words).
+    stats.push(compute_latency(&timer, config.num_pages, 1, 50));
     writeln!(Console::new(), "\nDone.\n").unwrap();
 
     const HEADERS: &[&str] = &[
