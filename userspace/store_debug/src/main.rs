@@ -25,44 +25,79 @@ use persistent_store::{Storage, StorageIndex};
 
 libtock_core::stack_size! {0x2000}
 
+const FLASH_START: usize = 0x40000;
+const STORAGE_START: usize = 0xBE000;
+const WORD_SIZE: usize = 4;
+
+fn test_index(index: usize, words: usize) {
+    let mut console = Console::new();
+    let mut storage = new_storage().unwrap();
+    let page_size = storage.page_size();
+
+    let offset = (STORAGE_START - FLASH_START) / WORD_SIZE;
+    let page = (index - offset) / page_size;
+    let byte = ((index - offset) % page_size) * WORD_SIZE;
+    let addr = index * WORD_SIZE + FLASH_START;
+
+    writeln!(
+        console,
+        "Testing index {:#X} (addr={:#X}, page={:#X}, byte={:#X}, words={})",
+        index, addr, page, byte, words
+    )
+    .unwrap();
+    console.flush();
+
+    let result = storage
+        .write_slice(StorageIndex { page, byte }, &vec![0xC3; words * 4])
+        .unwrap();
+    writeln!(console, " -- Write result {:?}\n", result).unwrap();
+    console.flush();
+}
+
+fn test_address(addr: usize, words: usize) {
+    test_index((addr - FLASH_START) / WORD_SIZE, words);
+}
+
 fn main() {
     let mut console = Console::new();
+    let mut todo = Vec::new();
 
-    let mut storage = new_storage().unwrap();
-    let num_pages = storage.num_pages();
-    let page_size = storage.page_size();
-    const MAX_LENGTH: usize = 512;
-    let pattern: u8 = 0x00;
-    for page in 0..num_pages {
-        write!(console, "Erase page {}:", page).unwrap();
-        console.flush();
-        let result = storage.erase_page(page);
-        writeln!(console, "{:?}", result).unwrap();
-        console.flush();
-        let mut todo = Vec::new();
-        for i in 0..page_size / MAX_LENGTH {
-            todo.push((i * MAX_LENGTH, MAX_LENGTH));
-        }
-        while let Some((byte, mut length)) = todo.pop() {
-            let index = StorageIndex { page, byte };
-            write!(console, "Write byte {:#x} length {:#x}:", byte, length).unwrap();
-            console.flush();
-            let result = storage.write_slice(index, &vec![pattern; length]);
-            writeln!(console, "{:?}", result).unwrap();
-            console.flush();
-            if result.is_err() && length > 1 {
-                let slice = storage.read_slice(index, length).unwrap();
-                let ok_length = slice.iter().take_while(|&&x| x == pattern).count();
-                writeln!(console, "Read length {:#x}", ok_length).unwrap();
-                console.flush();
-                length /= 2;
-                if ok_length < length {
-                    todo.push((byte + length, length));
-                    todo.push((byte + ok_length, length - ok_length));
-                } else {
-                    todo.push((byte + ok_length, 2 * length - ok_length));
-                }
-            }
-        }
+    writeln!(console, "\n *** Testing indices *** \n").unwrap();
+    console.flush();
+
+    todo.push((0x1F838, 1));
+    todo.push((0x1F838, 2));
+    todo.push((0x1F838, 4));
+    todo.push((0x1F838, 8));
+    todo.push((0x1F840, 1));
+    todo.push((0x1F840, 2));
+    todo.push((0x1F840, 4));
+    todo.push((0x1F840, 8));
+    todo = todo.into_iter().rev().collect();
+
+    while let Some((index, length)) = todo.pop() {
+        test_index(index, length);
     }
+
+    writeln!(console, "\n *** Testing addresses *** \n").unwrap();
+    console.flush();
+
+    todo.push((0xBE000, 1));
+    todo.push((0xBE000, 2));
+    todo.push((0xBE000, 4));
+    todo.push((0xBE000, 32));
+    todo.push((0xBE100, 1));
+    todo.push((0xBE100, 2));
+    todo.push((0xBE100, 4));
+    todo.push((0xBE100, 8));
+    todo.push((0xBE100, 16));
+    todo = todo.into_iter().rev().collect();
+
+    while let Some((index, length)) = todo.pop() {
+        test_address(index, length);
+    }
+
+    writeln!(console, "\n *** Triggering failure *** \n").unwrap();
+    console.flush();
+    test_address(0xBE0E0, 16);
 }

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::cell::Cell;
+use super::flash::Client;
+use super::flash::Flash;
 use ::kernel::common::cells::{OptionalCell, TakeCell};
 use ::kernel::common::{List, ListLink, ListNode};
 use ::kernel::ReturnCode;
-use super::flash::Flash;
-use super::flash::Client;
+use core::cell::Cell;
 
 /// Virtualizes the H1 flash abstraction to support multiple clients.
 pub struct MuxFlash<'f> {
@@ -29,8 +29,8 @@ pub struct MuxFlash<'f> {
 #[derive(Copy, Clone, PartialEq)]
 enum Operation {
     Idle,
-    Write(usize),        // offset in words
-    Erase(usize),        // page number
+    Write(usize), // offset in words
+    Erase(usize), // page number
 }
 
 pub struct FlashUser<'f> {
@@ -59,7 +59,6 @@ impl<'f> Client<'f> for MuxFlash<'f> {
     }
 }
 
-
 impl<'f> FlashUser<'f> {
     pub const fn new(mux: &'f MuxFlash<'f>) -> FlashUser<'f> {
         FlashUser {
@@ -69,7 +68,7 @@ impl<'f> FlashUser<'f> {
             write_pos: Cell::new(0),
             operation: Cell::new(Operation::Idle),
             next: ListLink::empty(),
-            client: OptionalCell::empty()
+            client: OptionalCell::empty(),
         }
     }
 }
@@ -107,7 +106,6 @@ impl<'f> Flash<'f> for FlashUser<'f> {
     }
 }
 
-
 impl<'f> Client<'f> for FlashUser<'f> {
     fn erase_done(&self, rcode: ReturnCode) {
         self.operation.set(Operation::Idle);
@@ -115,9 +113,10 @@ impl<'f> Client<'f> for FlashUser<'f> {
     }
 
     fn write_done(&self, data: &'f mut [u32], rcode: ReturnCode) {
-        debug!("write_done -- rcode={:?}", rcode);
+        debug!("write_done={:?}", rcode);
         self.operation.set(Operation::Idle);
-        self.client.map(move |client| client.write_done(data, rcode));
+        self.client
+            .map(move |client| client.write_done(data, rcode));
     }
 }
 
@@ -155,7 +154,7 @@ impl<'f> MuxFlash<'f> {
                     match node.operation.get() {
                         Operation::Write(offset) => {
                             self.driver.write(offset, buf);
-                        },
+                        }
                         Operation::Erase(page_number) => {
                             self.driver.erase(page_number);
                         }
@@ -171,7 +170,6 @@ impl<'f> MuxFlash<'f> {
         self.driver.read(word)
     }
 }
-
 
 impl<'f> ListNode<'f, FlashUser<'f>> for FlashUser<'f> {
     fn next(&'f self) -> &'f ListLink<'f, FlashUser<'f>> {
