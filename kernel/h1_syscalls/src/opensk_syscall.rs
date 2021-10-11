@@ -14,6 +14,7 @@
 
 // NOTE: The code uses asserts and expect to ease debugging.
 
+use core::cmp;
 use core::convert::TryFrom;
 use h1::hil::flash::{Client, Flash};
 use kernel::common::cells::OptionalCell;
@@ -30,6 +31,9 @@ const MAX_PAGE_ERASES: usize = 10000;
 const MAX_WRITE_LENGTH: usize = 32;
 const WORD_MASK: usize = WORD_SIZE - 1;
 const PAGE_MASK: usize = PAGE_SIZE - 1;
+
+// For some reason, writes seem to fail when spaning a 256 byte boundary.
+const WEIRD_SIZE: usize = 64; // words
 
 // To avoid allocating in the kernel, we use this static buffer.
 static mut WRITE_BUFFER: [WORD; MAX_WRITE_LENGTH] = [0; MAX_WRITE_LENGTH];
@@ -64,10 +68,11 @@ impl<'c, C: Flash<'c>> OpenskSyscall<'c, C> {
     }
 
     fn write_block(&self, mut state: WriteState) -> ReturnCode {
-        let data_length = core::cmp::min(
-            state.slice.len() / WORD_SIZE - state.offset,
+        let max_length = cmp::min(
+            WEIRD_SIZE - (state.ptr + state.offset) % WEIRD_SIZE,
             MAX_WRITE_LENGTH,
         );
+        let data_length = cmp::min(state.slice.len() / WORD_SIZE - state.offset, max_length);
         let slice = &state.slice.as_ref()[state.offset * WORD_SIZE..];
         let data = unsafe { &mut WRITE_BUFFER[..data_length] };
         for (dst, src) in data.iter_mut().zip(slice.chunks(WORD_SIZE)) {
