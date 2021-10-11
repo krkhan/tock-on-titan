@@ -92,6 +92,7 @@ impl<'f> Flash<'f> for FlashUser<'f> {
         if self.operation.get() != Operation::Idle {
             return (ReturnCode::EBUSY, Some(data));
         }
+        debug!("write(0x{:X}, {})", target, data.len());
         self.write_pos.set(target);
         self.write_len.set(data.len());
         self.buffer.replace(data);
@@ -114,6 +115,7 @@ impl<'f> Client<'f> for FlashUser<'f> {
     }
 
     fn write_done(&self, data: &'f mut [u32], rcode: ReturnCode) {
+        debug!("write_done -- rcode={:?}", rcode);
         self.operation.set(Operation::Idle);
         self.client.map(move |client| client.write_done(data, rcode));
     }
