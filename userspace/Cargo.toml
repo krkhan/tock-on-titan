@@ -48,5 +48,6 @@ members = [
 	"store_debug",
 	"nvcounter_test",
 	"otpilot",
+	"opensk",
 	"test_harness",
 ]

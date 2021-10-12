@@ -13,9 +13,9 @@
 # limitations under the License.
 
 BUILD_SUBDIRS := $(addprefix userspace/,                   \
-                                         erase_storage     \
-                                         store_debug       \
-                                         store_latency )
+                                         store_latency     \
+                                         u2f_test          \
+                                         opensk )
 
 # All boards that we should build for
 BOARDS += golf2
@@ -303,7 +303,7 @@ build/userspace/$(APP)/$(BOARD)/app$(IMAGE): sandbox_setup build/gitlongtag
 	rm -f build/userspace/cargo$(IMAGE)/thumbv7m-none-eabi/release/$(APP)-*
 	cd userspace/$(APP) && \
 		CARGO_TARGET_DIR="../../build/userspace/cargo$(IMAGE)" \
-		RUSTFLAGS="-C link-arg=-T./layout$(IMAGE).ld -C relocation-model=static -C linker-flavor=ld.lld" \
+		RUSTFLAGS="-C link-arg=-T./layout$(IMAGE).ld -C relocation-model=static -C linker-flavor=ld.lld -C link-args=-error-limit=0 -C link-arg=-icf=all -C force-frame-pointers=no" \
 		TOCK_KERNEL_VERSION=$(APP) \
 		$(BWRAP) cargo build \
 		--offline --release
@@ -318,7 +318,7 @@ build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf: \
 		-o build/userspace/$(APP)/$(BOARD)/app_tab$(IMAGE) \
 		build/userspace/$(APP)/$(BOARD)/app$(IMAGE) --stack=2048 --app-heap=4096 \
 		--kernel-heap=1024 --protected-region-size=64
-	if [ "$$$$(wc -c < build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf)" -gt 65536 ]; \
+	if [ "$$$$(wc -c < build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf)" -gt 131072 ]; \
 		then echo "#########################################################"; \
 		     echo "# Application $(notdir $(APP)) for board $(BOARD) is too large."; \
 		     echo "# Check size of build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf"; \
