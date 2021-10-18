@@ -17,3 +17,4 @@ use_spin = ["spin"]
 
 [dependencies.spin]
 optional = true
+path = "../spin"
