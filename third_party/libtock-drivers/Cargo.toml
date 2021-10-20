@@ -10,6 +10,7 @@ edition = "2018"
 
 [dependencies]
 libtock_core = { path = "../libtock-rs/core" }
+rand_core = { path = "../rand/rand_core" }
 
 [features]
 debug_ctap = []
