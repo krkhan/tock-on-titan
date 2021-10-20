@@ -86,9 +86,11 @@ fn main() {
         console.flush();
 
         let mut pkt_request = [0; 64];
-        let has_packet = usb_ctap_hid::recv_with_timeout(&mut pkt_request, KEEPALIVE_DELAY);
+        let has_packet = usb_ctap_hid::recv(&mut pkt_request);
 
         if has_packet {
+            writeln!(console, "Received packet from USB").unwrap();
+            console.flush();
             #[cfg(feature = "debug_ctap")]
             print_packet_notice("Received packet", &timer);
         } else {
@@ -104,6 +106,8 @@ fn main() {
 
         if has_packet {
             let reply = ctap_hid.process_hid_packet(&pkt_request, now, &mut ctap_state);
+            writeln!(console, "Processed packet response").unwrap();
+            console.flush();
             // This block handles sending packets.
             for mut pkt_reply in reply {
                 let sent = usb_ctap_hid::send(&mut pkt_reply);
