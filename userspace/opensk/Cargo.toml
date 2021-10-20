@@ -20,7 +20,6 @@ byteorder = { version = "1", default-features = false }
 arrayref = "0.3.6"
 
 [features]
-default = ["with_ctap1"]
 debug_ctap = ["libtock_drivers/debug_ctap"]
 std = ["crypto/std", "persistent_store/std"]
 verbose = ["debug_ctap", "libtock_drivers/verbose_usb"]

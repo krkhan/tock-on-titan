@@ -25,10 +25,8 @@ use super::CtapState;
 use alloc::vec;
 use alloc::vec::Vec;
 use arrayref::{array_ref, array_refs};
-#[cfg(feature = "debug_ctap")]
 use core::fmt::Write;
 use crypto::rng256::Rng256;
-#[cfg(feature = "debug_ctap")]
 use libtock_drivers::console::Console;
 use libtock_drivers::timer::{ClockValue, Duration, Timestamp};
 
@@ -156,6 +154,7 @@ impl CtapHid {
         R: Rng256,
         CheckUserPresence: Fn(ChannelID) -> Result<(), Ctap2StatusCode>,
     {
+        let mut console = Console::new();
         // TODO: Send COMMAND_KEEPALIVE every 100ms?
         match self
             .assembler
@@ -173,6 +172,10 @@ impl CtapHid {
                 }
                 // If another command arrives, stop winking to prevent accidential button touches.
                 self.wink_permission = TimedPermission::waiting();
+
+                writeln!(console, "Channel ID: {:?}", cid).unwrap();
+                writeln!(console, "Command: {:#X}", message.cmd).unwrap();
+                console.flush();
 
                 match message.cmd {
                     // CTAP specification (version 20190130) section 8.1.9.1.1
@@ -201,6 +204,8 @@ impl CtapHid {
                         // TODO: Send keep-alive packets in the meantime.
                         let response =
                             ctap_state.process_command(&message.payload, cid, clock_value);
+                        writeln!(console, "Processed CBOR response");
+                        console.flush();
                         if let Some(iterator) = CtapHid::split_message(Message {
                             cid,
                             cmd: CtapHid::COMMAND_CBOR,

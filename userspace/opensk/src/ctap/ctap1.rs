@@ -20,7 +20,9 @@ use alloc::vec::Vec;
 use arrayref::array_ref;
 use core::convert::Into;
 use core::convert::TryFrom;
+use core::fmt::Write;
 use crypto::rng256::Rng256;
+use libtock_drivers::console::Console;
 use libtock_drivers::timer::ClockValue;
 
 // For now, they're the same thing with apdu.rs containing the authoritative definition
@@ -189,13 +191,12 @@ impl Ctap1Command {
         R: Rng256,
         CheckUserPresence: Fn(ChannelID) -> Result<(), Ctap2StatusCode>,
     {
-        if !ctap_state
-            .allows_ctap1()
-            .map_err(|_| Ctap1StatusCode::SW_INTERNAL_EXCEPTION)?
-        {
-            return Err(Ctap1StatusCode::SW_COMMAND_NOT_ALLOWED);
-        }
+        let mut console = Console::new();
+        writeln!(console, "Parsing U2F message: {:?}", message);
+        console.flush();
         let command = U2fCommand::try_from(message)?;
+        writeln!(console, "Parsed U2F message");
+        console.flush();
         match command {
             U2fCommand::Register {
                 challenge,

@@ -49,6 +49,16 @@ const SEND_TIMEOUT: Duration<isize> = Duration::from_ms(1000);
 
 libtock_core::stack_size! {0x2000}
 
+fn print_packet(pkt: &[u8]) {
+    let mut console = Console::new();
+    write!(console, "[");
+    for byte in pkt {
+        write!(console, "{:#X} ", byte);
+    }
+    writeln!(console, "]");
+    console.flush();
+}
+
 fn main() {
     // Setup the timer with a dummy callback (we only care about reading the current time, but the
     // API forces us to set an alarm callback too).
@@ -67,16 +77,8 @@ fn main() {
     let boot_time = timer::ClockValue::new(0, 0);
 
     let mut rng = TockRng256 {};
-    writeln!(console, "Initialized RNG").unwrap();
-    console.flush();
-
     let mut ctap_state = CtapState::new(&mut rng, check_user_presence, boot_time);
-    writeln!(console, "Initialized CtapState").unwrap();
-    console.flush();
-
     let mut ctap_hid = CtapHid::new();
-    writeln!(console, "Initialized CtapHid").unwrap();
-    console.flush();
 
     // Main loop. If CTAP1 is used, we register button presses for U2F while receiving and waiting.
     // The way TockOS and apps currently interact, callbacks need a yield syscall to execute,
@@ -89,10 +91,9 @@ fn main() {
         let has_packet = usb_ctap_hid::recv(&mut pkt_request);
 
         if has_packet {
-            writeln!(console, "Received packet from USB").unwrap();
+            write!(console, "Received packet from USB: ").unwrap();
             console.flush();
-            #[cfg(feature = "debug_ctap")]
-            print_packet_notice("Received packet", &timer);
+            print_packet(&pkt_request);
         } else {
             panic!("Error receiving packet");
         }
@@ -101,28 +102,19 @@ fn main() {
         if has_packet {
             writeln!(console, "Processing packet response").unwrap();
             console.flush();
-            ctap_state.u2f_up_state.grant_up(now);
-            let mut reply =
-                ctap::ctap1::Ctap1Command::process_command(&pkt_request[..], &mut ctap_state, now)
-                    .unwrap_or([0; 0].into());
-            if reply.len() == 0 {
-                writeln!(console, "Could not process packet response").unwrap();
-                console.flush();
-                continue;
-            }
+            let mut reply = ctap_hid.process_hid_packet(&pkt_request, now, &mut ctap_state);
             writeln!(console, "Processed packet response").unwrap();
             console.flush();
             // This block handles sending packets.
-            let mut pkt_reply: [u8; 64] = [0; 64];
-            for i in 0..64 {
-                pkt_reply[i] = reply[i];
-            }
-            let sent = usb_ctap_hid::send(&mut pkt_reply);
-            if sent {
-                #[cfg(feature = "debug_ctap")]
-                print_packet_notice("Sent packet", &timer);
-            } else {
-                panic!("Error sending packet");
+            for mut pkt_reply in reply {
+                let sent = usb_ctap_hid::send(&mut pkt_reply);
+                if sent {
+                    write!(console, "Sent response packet to USB: ").unwrap();
+                    console.flush();
+                    print_packet(&pkt_reply);
+                } else {
+                    panic!("Error sending packet");
+                }
             }
         }
     }
