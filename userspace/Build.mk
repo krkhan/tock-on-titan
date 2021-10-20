@@ -318,7 +318,7 @@ build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf: \
 		-o build/userspace/$(APP)/$(BOARD)/app_tab$(IMAGE) \
 		build/userspace/$(APP)/$(BOARD)/app$(IMAGE) --stack=2048 --app-heap=4096 \
 		--kernel-heap=1024 --protected-region-size=64
-	if [ "$$$$(wc -c < build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf)" -gt 131072 ]; \
+	if [ "$$$$(wc -c < build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf)" -gt 262144 ]; \
 		then echo "#########################################################"; \
 		     echo "# Application $(notdir $(APP)) for board $(BOARD) is too large."; \
 		     echo "# Check size of build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf"; \

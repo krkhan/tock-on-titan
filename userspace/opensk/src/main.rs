@@ -93,15 +93,14 @@ fn main() {
         }
 
         let mut pkt_request = [0; 64];
-        let has_packet = match usb_ctap_hid::recv_with_timeout(&mut pkt_request, KEEPALIVE_DELAY) {
-            Some(usb_ctap_hid::SendOrRecvStatus::Received) => {
-                #[cfg(feature = "debug_ctap")]
-                print_packet_notice("Received packet", &timer);
-                true
-            }
-            Some(_) => panic!("Error receiving packet"),
-            None => false,
-        };
+        let has_packet = usb_ctap_hid::recv_with_timeout(&mut pkt_request, KEEPALIVE_DELAY);
+
+        if has_packet {
+            #[cfg(feature = "debug_ctap")]
+            print_packet_notice("Received packet", &timer);
+        } else {
+            panic!("Error receiving packet");
+        }
 
         let now = timer.get_current_clock().flex_unwrap();
         #[cfg(feature = "with_ctap1")]
@@ -128,25 +127,12 @@ fn main() {
             let reply = ctap_hid.process_hid_packet(&pkt_request, now, &mut ctap_state);
             // This block handles sending packets.
             for mut pkt_reply in reply {
-                let status = usb_ctap_hid::send_or_recv_with_timeout(&mut pkt_reply, SEND_TIMEOUT);
-                match status {
-                    None => {
-                        #[cfg(feature = "debug_ctap")]
-                        print_packet_notice("Sending packet timed out", &timer);
-                        // TODO: reset the ctap_hid state.
-                        // Since sending the packet timed out, we cancel this reply.
-                        break;
-                    }
-                    Some(usb_ctap_hid::SendOrRecvStatus::Error) => panic!("Error sending packet"),
-                    Some(usb_ctap_hid::SendOrRecvStatus::Sent) => {
-                        #[cfg(feature = "debug_ctap")]
-                        print_packet_notice("Sent packet", &timer);
-                    }
-                    Some(usb_ctap_hid::SendOrRecvStatus::Received) => {
-                        #[cfg(feature = "debug_ctap")]
-                        print_packet_notice("Received an UNEXPECTED packet", &timer);
-                        // TODO: handle this unexpected packet.
-                    }
+                let sent = usb_ctap_hid::send(&mut pkt_reply);
+                if sent {
+                    #[cfg(feature = "debug_ctap")]
+                    print_packet_notice("Sent packet", &timer);
+                } else {
+                    panic!("Error sending packet");
                 }
             }
         }
@@ -196,70 +182,6 @@ fn print_packet_notice(notice_text: &str, timer: &Timer) {
         now_us % 1_000_000
     )
     .unwrap();
-}
-
-// Returns whether the keepalive was sent, or false if cancelled.
-fn send_keepalive_up_needed(
-    cid: ChannelID,
-    timeout: Duration<isize>,
-) -> Result<(), Ctap2StatusCode> {
-    let keepalive_msg = CtapHid::keepalive(cid, KeepaliveStatus::UpNeeded);
-    for mut pkt in keepalive_msg {
-        let status = usb_ctap_hid::send_or_recv_with_timeout(&mut pkt, timeout);
-        match status {
-            None => {
-                #[cfg(feature = "debug_ctap")]
-                writeln!(Console::new(), "Sending a KEEPALIVE packet timed out").unwrap();
-                // TODO: abort user presence test?
-            }
-            Some(usb_ctap_hid::SendOrRecvStatus::Error) => panic!("Error sending KEEPALIVE packet"),
-            Some(usb_ctap_hid::SendOrRecvStatus::Sent) => {
-                #[cfg(feature = "debug_ctap")]
-                writeln!(Console::new(), "Sent KEEPALIVE packet").unwrap();
-            }
-            Some(usb_ctap_hid::SendOrRecvStatus::Received) => {
-                // We only parse one packet, because we only care about CANCEL.
-                let (received_cid, processed_packet) = CtapHid::process_single_packet(&pkt);
-                if received_cid != &cid {
-                    #[cfg(feature = "debug_ctap")]
-                    writeln!(
-                        Console::new(),
-                        "Received a packet on channel ID {:?} while sending a KEEPALIVE packet",
-                        received_cid,
-                    )
-                    .unwrap();
-                    return Ok(());
-                }
-                match processed_packet {
-                    ProcessedPacket::InitPacket { cmd, .. } => {
-                        if cmd == CtapHid::COMMAND_CANCEL {
-                            // We ignore the payload, we can't answer with an error code anyway.
-                            #[cfg(feature = "debug_ctap")]
-                            writeln!(Console::new(), "User presence check cancelled").unwrap();
-                            return Err(Ctap2StatusCode::CTAP2_ERR_KEEPALIVE_CANCEL);
-                        } else {
-                            #[cfg(feature = "debug_ctap")]
-                            writeln!(
-                                Console::new(),
-                                "Discarded packet with command {} received while sending a KEEPALIVE packet",
-                                cmd,
-                            )
-                            .unwrap();
-                        }
-                    }
-                    ProcessedPacket::ContinuationPacket { .. } => {
-                        #[cfg(feature = "debug_ctap")]
-                        writeln!(
-                            Console::new(),
-                            "Discarded continuation packet received while sending a KEEPALIVE packet",
-                        )
-                        .unwrap();
-                    }
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 fn blink_leds(pattern_seed: usize) {
