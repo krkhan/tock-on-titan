@@ -19,7 +19,7 @@ mod config_command;
 mod credential_management;
 mod crypto_wrapper;
 #[cfg(feature = "with_ctap1")]
-mod ctap1;
+pub mod ctap1;
 mod customization;
 pub mod data_formats;
 pub mod hid;

@@ -97,30 +97,34 @@ fn main() {
             panic!("Error receiving packet");
         }
 
-        let now = timer.get_current_clock().flex_unwrap();
-
-        // These calls are making sure that even for long inactivity, wrapping clock values
-        // don't cause problems with timers.
-        ctap_state.update_timeouts(now);
-        ctap_hid.wink_permission = ctap_hid.wink_permission.check_expiration(now);
-
+        let now = timer::ClockValue::new(1, 1);
         if has_packet {
-            let reply = ctap_hid.process_hid_packet(&pkt_request, now, &mut ctap_state);
+            writeln!(console, "Processing packet response").unwrap();
+            console.flush();
+            ctap_state.u2f_up_state.grant_up(now);
+            let mut reply =
+                ctap::ctap1::Ctap1Command::process_command(&pkt_request[..], &mut ctap_state, now)
+                    .unwrap_or([0; 0].into());
+            if reply.len() == 0 {
+                writeln!(console, "Could not process packet response").unwrap();
+                console.flush();
+                continue;
+            }
             writeln!(console, "Processed packet response").unwrap();
             console.flush();
             // This block handles sending packets.
-            for mut pkt_reply in reply {
-                let sent = usb_ctap_hid::send(&mut pkt_reply);
-                if sent {
-                    #[cfg(feature = "debug_ctap")]
-                    print_packet_notice("Sent packet", &timer);
-                } else {
-                    panic!("Error sending packet");
-                }
+            let mut pkt_reply: [u8; 64] = [0; 64];
+            for i in 0..64 {
+                pkt_reply[i] = reply[i];
+            }
+            let sent = usb_ctap_hid::send(&mut pkt_reply);
+            if sent {
+                #[cfg(feature = "debug_ctap")]
+                print_packet_notice("Sent packet", &timer);
+            } else {
+                panic!("Error sending packet");
             }
         }
-
-        let now = timer.get_current_clock().flex_unwrap();
     }
 }
 
