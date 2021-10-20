@@ -24,7 +24,6 @@ extern crate byteorder;
 mod ctap;
 
 use core::cell::Cell;
-#[cfg(feature = "debug_ctap")]
 use core::fmt::Write;
 use crypto::rng256::TockRng256;
 use ctap::hid::{ChannelID, CtapHid, KeepaliveStatus, ProcessedPacket};
@@ -33,7 +32,6 @@ use ctap::CtapState;
 use libtock_core::result::{CommandError, EALREADY};
 use libtock_drivers::buttons;
 use libtock_drivers::buttons::ButtonState;
-#[cfg(feature = "debug_ctap")]
 use libtock_drivers::console::Console;
 use libtock_drivers::led;
 use libtock_drivers::result::{FlexUnwrap, TockError};
@@ -56,42 +54,25 @@ fn main() {
     // API forces us to set an alarm callback too).
     let mut with_callback = timer::with_callback(|_, _| {});
     let timer = with_callback.init().flex_unwrap();
+    let mut console = Console::new();
 
     // Setup USB driver.
     if !usb_ctap_hid::setup() {
         panic!("Cannot setup USB driver");
     }
 
+    writeln!(console, "Successfully setup USB driver").unwrap();
+    console.flush();
+
     let boot_time = timer.get_current_clock().flex_unwrap();
     let mut rng = TockRng256 {};
     let mut ctap_state = CtapState::new(&mut rng, check_user_presence, boot_time);
     let mut ctap_hid = CtapHid::new();
 
-    let mut led_counter = 0;
-    let mut last_led_increment = boot_time;
-
     // Main loop. If CTAP1 is used, we register button presses for U2F while receiving and waiting.
     // The way TockOS and apps currently interact, callbacks need a yield syscall to execute,
     // making consistent blinking patterns and sending keepalives harder.
     loop {
-        // Create the button callback, used for CTAP1.
-        #[cfg(feature = "with_ctap1")]
-        let button_touched = Cell::new(false);
-        #[cfg(feature = "with_ctap1")]
-        let mut buttons_callback = buttons::with_callback(|_button_num, state| {
-            match state {
-                ButtonState::Pressed => button_touched.set(true),
-                ButtonState::Released => (),
-            };
-        });
-        #[cfg(feature = "with_ctap1")]
-        let mut buttons = buttons_callback.init().flex_unwrap();
-        #[cfg(feature = "with_ctap1")]
-        // At the moment, all buttons are accepted. You can customize your setup here.
-        for mut button in &mut buttons {
-            button.enable().flex_unwrap();
-        }
-
         let mut pkt_request = [0; 64];
         let has_packet = usb_ctap_hid::recv_with_timeout(&mut pkt_request, KEEPALIVE_DELAY);
 
@@ -103,20 +84,6 @@ fn main() {
         }
 
         let now = timer.get_current_clock().flex_unwrap();
-        #[cfg(feature = "with_ctap1")]
-        {
-            if button_touched.get() {
-                ctap_state.u2f_up_state.grant_up(now);
-            }
-            // Cleanup button callbacks. We miss button presses while processing though.
-            // Heavy computation mostly follows a registered touch luckily. Unregistering
-            // callbacks is important to not clash with those from check_user_presence.
-            for mut button in &mut buttons {
-                button.disable().flex_unwrap();
-            }
-            drop(buttons);
-            drop(buttons_callback);
-        }
 
         // These calls are making sure that even for long inactivity, wrapping clock values
         // don't cause problems with timers.
@@ -138,35 +105,6 @@ fn main() {
         }
 
         let now = timer.get_current_clock().flex_unwrap();
-        if let Some(wait_duration) = now.wrapping_sub(last_led_increment) {
-            if wait_duration > KEEPALIVE_DELAY {
-                // Loops quickly when waiting for U2F user presence, so the next LED blink
-                // state is only set if enough time has elapsed.
-                led_counter += 1;
-                last_led_increment = now;
-            }
-        } else {
-            // This branch means the clock frequency changed. This should never happen.
-            led_counter += 1;
-            last_led_increment = now;
-        }
-
-        if ctap_hid.wink_permission.is_granted(now) {
-            wink_leds(led_counter);
-        } else {
-            #[cfg(not(feature = "with_ctap1"))]
-            switch_off_leds();
-            #[cfg(feature = "with_ctap1")]
-            {
-                if ctap_state.u2f_up_state.is_up_needed(now) {
-                    // Flash the LEDs with an almost regular pattern. The inaccuracy comes from
-                    // delay caused by processing and sending of packets.
-                    blink_leds(led_counter);
-                } else {
-                    switch_off_leds();
-                }
-            }
-        }
     }
 }
 

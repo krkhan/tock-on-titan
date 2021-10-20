@@ -107,7 +107,6 @@ pub fn send(buf: &mut [u8; 64]) -> bool {
 // If the timeout elapses, return None.
 #[allow(clippy::let_and_return)]
 pub fn recv_with_timeout(buf: &mut [u8; 64], timeout_delay: Duration<isize>) -> bool {
-    #[cfg(feature = "verbose_usb")]
     writeln!(
         Console::new(),
         "Receiving packet with timeout of {}ms",
