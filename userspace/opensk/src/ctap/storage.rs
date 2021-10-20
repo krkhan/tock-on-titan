@@ -33,8 +33,10 @@ use alloc::vec::Vec;
 use arrayref::array_ref;
 use core::cmp;
 use core::convert::TryInto;
+use core::fmt::Write;
 use crypto::rng256::Rng256;
 use embedded_flash::{new_storage, Storage};
+use libtock_drivers::console::Console;
 use persistent_store::{fragment, StoreUpdate};
 use sk_cbor::cbor_array_vec;
 
@@ -78,9 +80,16 @@ impl PersistentStore {
 
     /// Initializes the store by creating missing objects.
     fn init(&mut self, rng: &mut impl Rng256) -> Result<(), Ctap2StatusCode> {
+        let mut console = Console::new();
+        writeln!(console, "Initializing store").unwrap();
+        console.flush();
         // Generate and store the master keys if they are missing.
         if self.store.find_handle(key::MASTER_KEYS)?.is_none() {
+            writeln!(console, "Generating master encryption key").unwrap();
+            console.flush();
             let master_encryption_key = rng.gen_uniform_u8x32();
+            writeln!(console, "Successfully generated master encryption key").unwrap();
+            console.flush();
             let master_hmac_key = rng.gen_uniform_u8x32();
             let mut master_keys = Vec::with_capacity(64);
             master_keys.extend_from_slice(&master_encryption_key);

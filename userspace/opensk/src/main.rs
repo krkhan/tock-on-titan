@@ -64,15 +64,27 @@ fn main() {
     writeln!(console, "Successfully setup USB driver").unwrap();
     console.flush();
 
-    let boot_time = timer.get_current_clock().flex_unwrap();
+    let boot_time = timer::ClockValue::new(0, 0);
+
     let mut rng = TockRng256 {};
+    writeln!(console, "Initialized RNG").unwrap();
+    console.flush();
+
     let mut ctap_state = CtapState::new(&mut rng, check_user_presence, boot_time);
+    writeln!(console, "Initialized CtapState").unwrap();
+    console.flush();
+
     let mut ctap_hid = CtapHid::new();
+    writeln!(console, "Initialized CtapHid").unwrap();
+    console.flush();
 
     // Main loop. If CTAP1 is used, we register button presses for U2F while receiving and waiting.
     // The way TockOS and apps currently interact, callbacks need a yield syscall to execute,
     // making consistent blinking patterns and sending keepalives harder.
     loop {
+        writeln!(console, "Receiving packet from USB").unwrap();
+        console.flush();
+
         let mut pkt_request = [0; 64];
         let has_packet = usb_ctap_hid::recv_with_timeout(&mut pkt_request, KEEPALIVE_DELAY);
 

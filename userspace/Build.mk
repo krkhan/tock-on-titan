@@ -13,6 +13,7 @@
 # limitations under the License.
 
 BUILD_SUBDIRS := $(addprefix userspace/,                   \
+                                         rng               \
                                          store_latency     \
                                          u2f_test          \
                                          opensk )
