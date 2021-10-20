@@ -100,8 +100,16 @@ impl SeedableRng for XorShiftRng {
     }
 }
 
+static mut XOR_RNG: XorShiftRng = XorShiftRng {
+    x: w(0x01),
+    y: w(0x02),
+    z: w(0x03),
+    w: w(0x04),
+};
+
 pub fn fill_buffer(buf: &mut [u8]) -> bool {
-    let mut xor_rng = XorShiftRng::from_seed([1, 2, 3, 4, 5, 5, 7, 8, 8, 7, 6, 5, 4, 3, 2, 1]);
-    xor_rng.fill_bytes(buf);
+    unsafe {
+        XOR_RNG.fill_bytes(buf);
+    }
     true
 }

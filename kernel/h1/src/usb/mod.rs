@@ -29,7 +29,6 @@ use cortexm3::support;
 use kernel::ReturnCode;
 use kernel::common::cells::{OptionalCell, TakeCell};
 use kernel::common::registers::{LocalRegisterCopy};
-use kernel::hil::usb::UsbController;
 use crate::pmu::{Clock, PeripheralClock, PeripheralClock1};
 
 use self::constants::*;

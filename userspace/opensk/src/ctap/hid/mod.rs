@@ -204,7 +204,7 @@ impl CtapHid {
                         // TODO: Send keep-alive packets in the meantime.
                         let response =
                             ctap_state.process_command(&message.payload, cid, clock_value);
-                        writeln!(console, "Processed CBOR response");
+                        writeln!(console, "Processed CBOR response").unwrap();
                         console.flush();
                         if let Some(iterator) = CtapHid::split_message(Message {
                             cid,

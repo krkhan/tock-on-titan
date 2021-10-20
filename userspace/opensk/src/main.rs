@@ -30,6 +30,7 @@ use ctap::hid::{ChannelID, CtapHid, KeepaliveStatus, ProcessedPacket};
 use ctap::status_code::Ctap2StatusCode;
 use ctap::CtapState;
 use libtock_core::result::{CommandError, EALREADY};
+use libtock_core::syscalls;
 use libtock_drivers::buttons;
 use libtock_drivers::buttons::ButtonState;
 use libtock_drivers::console::Console;
@@ -43,28 +44,33 @@ use libtock_drivers::timer::Timer;
 use libtock_drivers::timer::Timestamp;
 use libtock_drivers::usb_ctap_hid;
 
-const KEEPALIVE_DELAY_MS: isize = 100;
-const KEEPALIVE_DELAY: Duration<isize> = Duration::from_ms(KEEPALIVE_DELAY_MS);
-const SEND_TIMEOUT: Duration<isize> = Duration::from_ms(1000);
-
 libtock_core::stack_size! {0x2000}
 
 fn print_packet(pkt: &[u8]) {
     let mut console = Console::new();
-    write!(console, "[");
+    write!(console, "[ ").unwrap();
     for byte in pkt {
-        write!(console, "{:#X} ", byte);
+        write!(console, "{:02X} ", byte).unwrap();
     }
-    writeln!(console, "]");
+    writeln!(console, "]").unwrap();
     console.flush();
 }
 
 fn main() {
+    let mut console = Console::new();
+
+    let mem_start = unsafe { syscalls::raw::memop(2, 0) };
+    let mem_end = unsafe { syscalls::raw::memop(3, 0) };
+
+    writeln!(console, "Memory start: {:#08X}", mem_start).unwrap();
+    writeln!(console, "Memory end: {:#08X}", mem_end).unwrap();
+    writeln!(console, "Memory size: {:#08X}", mem_end - mem_start).unwrap();
+    console.flush();
+
     // Setup the timer with a dummy callback (we only care about reading the current time, but the
     // API forces us to set an alarm callback too).
     let mut with_callback = timer::with_callback(|_, _| {});
     let timer = with_callback.init().flex_unwrap();
-    let mut console = Console::new();
 
     // Setup USB driver.
     if !usb_ctap_hid::setup() {
@@ -117,69 +123,6 @@ fn main() {
                 }
             }
         }
-    }
-}
-
-#[cfg(feature = "debug_ctap")]
-fn print_packet_notice(notice_text: &str, timer: &Timer) {
-    let now = timer.get_current_clock().flex_unwrap();
-    let now_us = (Timestamp::<f64>::from_clock_value(now).ms() * 1000.0) as u64;
-    writeln!(
-        Console::new(),
-        "{} at {}.{:06} s",
-        notice_text,
-        now_us / 1_000_000,
-        now_us % 1_000_000
-    )
-    .unwrap();
-}
-
-fn blink_leds(pattern_seed: usize) {
-    for l in 0..led::count().flex_unwrap() {
-        if (pattern_seed ^ l).count_ones() & 1 != 0 {
-            led::get(l).flex_unwrap().on().flex_unwrap();
-        } else {
-            led::get(l).flex_unwrap().off().flex_unwrap();
-        }
-    }
-}
-
-fn wink_leds(pattern_seed: usize) {
-    // This generates a "snake" pattern circling through the LEDs.
-    // Fox example with 4 LEDs the sequence of lit LEDs will be the following.
-    // 0 1 2 3
-    // * *
-    // * * *
-    //   * *
-    //   * * *
-    //     * *
-    // *   * *
-    // *     *
-    // * *   *
-    // * *
-    let count = led::count().flex_unwrap();
-    let a = (pattern_seed / 2) % count;
-    let b = ((pattern_seed + 1) / 2) % count;
-    let c = ((pattern_seed + 3) / 2) % count;
-
-    for l in 0..count {
-        // On nRF52840-DK, logically swap LEDs 3 and 4 so that the order of LEDs form a circle.
-        let k = match l {
-            2 => 3,
-            3 => 2,
-            _ => l,
-        };
-        if k == a || k == b || k == c {
-            led::get(l).flex_unwrap().on().flex_unwrap();
-        } else {
-            led::get(l).flex_unwrap().off().flex_unwrap();
-        }
-    }
-}
-
-fn switch_off_leds() {
-    for l in 0..led::count().flex_unwrap() {
-        led::get(l).flex_unwrap().off().flex_unwrap();
     }
 }
 

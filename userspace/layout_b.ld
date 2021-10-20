@@ -18,7 +18,7 @@
 
 MEMORY {
 /* Flash RW-B (apps) */
-  FLASH (rx) : ORIGIN = 0x0009ea40, LENGTH = 0x000215c0
+  FLASH (rx) : ORIGIN = 0x0009d240, LENGTH = 0x00022dc0
 
 /* */
   SRAM (rwx) : ORIGIN = 0x00014000, LENGTH = 0x0000c000

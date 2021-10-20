@@ -1,3 +1,5 @@
+cargo-features = ["strip"]
+
 [package]
 name = "opensk"
 version = "1.0.0"
@@ -41,3 +43,4 @@ panic = "abort"
 lto = true # Link Time Optimization usually reduces size of binaries and static libraries
 opt-level = "z"
 codegen-units = 1
+strip = true

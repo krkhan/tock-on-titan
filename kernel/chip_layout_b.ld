@@ -18,8 +18,8 @@
 MEMORY
 {
 /* Flash RW-B (kernel + apps) */
-  rom (rx)     : ORIGIN = 0x00084400, LENGTH = 0x0001a600
-  prog (rx)    : ORIGIN = 0x0009ea00, LENGTH = 0x00021600
+  rom (rx)     : ORIGIN = 0x00084400, LENGTH = 0x00018e00
+  prog (rx)    : ORIGIN = 0x0009d200, LENGTH = 0x00022e00
 
 /* RAM */
   ram (rwx)    : ORIGIN = 0x00010000, LENGTH = 0x00004000
