@@ -44,7 +44,7 @@ use libtock_drivers::timer::Timer;
 use libtock_drivers::timer::Timestamp;
 use libtock_drivers::usb_ctap_hid;
 
-libtock_core::stack_size! {0x2000}
+libtock_core::stack_size! {0x4000}
 
 fn print_packet(pkt: &[u8]) {
     let mut console = Console::new();

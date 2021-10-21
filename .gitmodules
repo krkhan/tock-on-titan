@@ -11,6 +11,7 @@
 	branch = krkhan_opensk
 	path = third_party/libtock-rs
 	url = https://github.com/krkhan/libtock-rs
+	ignore = dirty
 
 [submodule "third_party/tock"]
 	path = third_party/tock

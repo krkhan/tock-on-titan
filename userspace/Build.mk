@@ -317,7 +317,7 @@ build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf: \
 		build/cargo-host/release/elf2tab build/userspace/$(APP)/$(BOARD)/app$(IMAGE)
 	build/cargo-host/release/elf2tab -n $(APP) \
 		-o build/userspace/$(APP)/$(BOARD)/app_tab$(IMAGE) \
-		build/userspace/$(APP)/$(BOARD)/app$(IMAGE) --stack=2048 --app-heap=4096 \
+		build/userspace/$(APP)/$(BOARD)/app$(IMAGE) --stack=16384 --app-heap=16384 \
 		--kernel-heap=1024 --protected-region-size=64
 	if [ "$$$$(wc -c < build/userspace/$(APP)/$(BOARD)/app$(IMAGE).tbf)" -gt 262144 ]; \
 		then echo "#########################################################"; \
